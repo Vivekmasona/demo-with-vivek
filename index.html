@@ -1,5 +1,5 @@
-<!-- Video stream -->
-<video id="video" width="640" height="480" autoplay style="display:none;"></video>
+<!-- Video stream (webcam) -->
+<video id="video" width="640" height="480" autoplay></video>
 
 <!-- Audio Player -->
 <audio id="audioPlayer" controls>
@@ -14,7 +14,7 @@
 <script>
 const video = document.getElementById('video');
 const audioPlayer = document.getElementById('audioPlayer');
-let isMuted = false;
+let blinkCooldown = false;
 
 // Setup camera
 async function setupCamera() {
@@ -33,9 +33,8 @@ faceMesh.setOptions({
     minTrackingConfidence: 0.5
 });
 
-// Eye blink detection helper
-function getEyeOpenRatio(landmarks, indices) {
-    // simple vertical distance / horizontal distance ratio
+// Helper to calculate eye aspect ratio
+function getEyeAspectRatio(landmarks, indices) {
     const top = landmarks[indices[1]];
     const bottom = landmarks[indices[5]];
     const left = landmarks[indices[0]];
@@ -48,20 +47,22 @@ function getEyeOpenRatio(landmarks, indices) {
 faceMesh.onResults(results => {
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const landmarks = results.multiFaceLandmarks[0];
-        
-        // Right eye indices for blink detection (example)
-        const rightEyeIndices = [33, 159, 145, 133, 153, 154];
-        const eyeRatio = getEyeOpenRatio(landmarks, rightEyeIndices);
 
-        // Threshold for blink (close eye)
-        if (eyeRatio < 0.2 && !isMuted) {
-            audioPlayer.volume = 0; // mute
-            isMuted = true;
-            console.log('Muted by eye blink');
-        } else if (eyeRatio >= 0.2 && isMuted) {
-            audioPlayer.volume = 1; // unmute
-            isMuted = false;
-            console.log('Unmuted by eye open');
+        // Right eye indices (example)
+        const rightEyeIndices = [33, 159, 145, 133, 153, 154];
+        const ear = getEyeAspectRatio(landmarks, rightEyeIndices);
+
+        // Blink threshold
+        if (ear < 0.2 && !blinkCooldown) {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                console.log('Play');
+            } else {
+                audioPlayer.pause();
+                console.log('Pause');
+            }
+            blinkCooldown = true;
+            setTimeout(() => blinkCooldown = false, 1000); // 1 second cooldown
         }
     }
 });
