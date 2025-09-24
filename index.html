@@ -1,0 +1,43 @@
+<!-- Audio Player -->
+<audio id="SAudio" controls>
+  <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+  Your browser does not support the audio element.
+</audio>
+
+<script>
+  const player = document.getElementById('SAudio');
+  let isMuted = false; // track mute state
+
+  // Function to toggle volume
+  function toggleVolume() {
+      if(isMuted) {
+          player.volume = 1; // unmute
+          isMuted = false;
+          console.log('Unmuted');
+      } else {
+          player.volume = 0; // mute
+          isMuted = true;
+          console.log('Muted');
+      }
+  }
+
+  // Proximity sensor detection
+  if ('ProximitySensor' in window) {
+      try {
+          const sensor = new ProximitySensor();
+          sensor.addEventListener('reading', () => {
+              if(sensor.distance < sensor.max) { // object detected near sensor
+                  toggleVolume(); // toggle on each detection
+              }
+          });
+          sensor.addEventListener('error', event => {
+              console.error(event.error.name, event.error.message);
+          });
+          sensor.start();
+      } catch (err) {
+          console.error('Proximity sensor not supported', err);
+      }
+  } else {
+      console.log('Proximity sensor not supported on this device/browser.');
+  }
+</script>
