@@ -4,10 +4,12 @@
 <!-- Canvas overlay -->
 <canvas id="overlay" width="640" height="480" style="position:absolute; left:0; top:0; z-index:2;"></canvas>
 
-<!-- Audio player -->
-<audio id="audioPlayer" controls style="position:relative; top:500px;">
+<!-- Target button -->
+<button id="targetBtn" style="position:absolute; left:500px; top:200px; z-index:3; width:100px; height:50px;">Click Me</button>
+
+<!-- Audio Player for demo -->
+<audio id="audioPlayer" controls style="position:absolute; top:550px;">
   <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
-  Your browser does not support the audio element.
 </audio>
 
 <!-- Mediapipe FaceMesh -->
@@ -18,8 +20,8 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
-const audioPlayer = document.getElementById('audioPlayer');
-let blinkCooldown = false;
+const btn = document.getElementById('targetBtn');
+let holdTimeout = null;
 
 // Setup webcam
 async function setupCamera() {
@@ -38,52 +40,44 @@ faceMesh.setOptions({
     minTrackingConfidence: 0.5
 });
 
-// Eye aspect ratio helper
-function getEyeAspectRatio(landmarks, indices) {
-    const top = landmarks[indices[1]];
-    const bottom = landmarks[indices[5]];
-    const left = landmarks[indices[0]];
-    const right = landmarks[indices[3]];
-    const vertical = Math.hypot(top.x - bottom.x, top.y - bottom.y);
-    const horizontal = Math.hypot(left.x - right.x, left.y - right.y);
-    return vertical / horizontal;
-}
-
-// Draw landmarks as dots
-function drawLandmarks(landmarks) {
+// Draw dot on nose
+let dot = {x: 0, y: 0};
+faceMesh.onResults(results => {
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    for (let i=0;i<landmarks.length;i++){
-        const x = landmarks[i].x * canvas.width;
-        const y = landmarks[i].y * canvas.height;
+
+    if(results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
+        const landmarks = results.multiFaceLandmarks[0];
+        const nose = landmarks[1]; // nose tip landmark
+        dot.x = nose.x * canvas.width;
+        dot.y = nose.y * canvas.height;
+
+        // Draw dot
         ctx.beginPath();
-        ctx.arc(x, y, 2, 0, 2*Math.PI);
+        ctx.arc(dot.x, dot.y, 10, 0, 2*Math.PI);
         ctx.fillStyle = 'red';
         ctx.fill();
-    }
-}
 
-faceMesh.onResults(results => {
-    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        const landmarks = results.multiFaceLandmarks[0];
-        drawLandmarks(landmarks);
+        // Check if dot over button
+        const btnRect = btn.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        const dotScreenX = canvasRect.left + dot.x;
+        const dotScreenY = canvasRect.top + dot.y;
 
-        // Right eye blink detection
-        const rightEyeIndices = [33, 159, 145, 133, 153, 154];
-        const ear = getEyeAspectRatio(landmarks, rightEyeIndices);
-
-        if (ear < 0.2 && !blinkCooldown) {
-            if(audioPlayer.paused){
-                audioPlayer.play();
-                console.log('Play');
-            } else {
-                audioPlayer.pause();
-                console.log('Pause');
+        if(dotScreenX > btnRect.left && dotScreenX < btnRect.right &&
+           dotScreenY > btnRect.top && dotScreenY < btnRect.bottom){
+               if(!holdTimeout){
+                   holdTimeout = setTimeout(()=>{
+                       btn.click();
+                       console.log('Button clicked via face dot!');
+                       holdTimeout = null;
+                   },4000); // 4 second hold
+               }
+        } else {
+            if(holdTimeout){
+                clearTimeout(holdTimeout);
+                holdTimeout = null;
             }
-            blinkCooldown = true;
-            setTimeout(()=>blinkCooldown=false, 1000); // 1s cooldown
         }
-    } else {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
     }
 });
 
