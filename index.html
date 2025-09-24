@@ -1,4 +1,4 @@
-<!-- Video stream for hand detection -->
+<!-- Video stream -->
 <video id="video" width="640" height="480" autoplay style="display:none;"></video>
 
 <!-- Audio Player -->
@@ -7,60 +7,74 @@
   Your browser does not support the audio element.
 </audio>
 
-<!-- Mediapipe Hands library -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<!-- Mediapipe FaceMesh -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-  const video = document.getElementById('video');
-  const audioPlayer = document.getElementById('audioPlayer');
-  let isMuted = false;
+const video = document.getElementById('video');
+const audioPlayer = document.getElementById('audioPlayer');
+let isMuted = false;
 
-  // Setup webcam
-  async function setupCamera() {
+// Setup camera
+async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
-  }
+}
 
-  // Hand detection using Mediapipe
-  const hands = new Hands({locateFile: (file) => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-  }});
-
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 1,
+// Initialize FaceMesh
+const faceMesh = new FaceMesh({locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+}});
+faceMesh.setOptions({
+    maxNumFaces: 1,
+    refineLandmarks: true,
     minDetectionConfidence: 0.5,
     minTrackingConfidence: 0.5
-  });
+});
 
-  hands.onResults(results => {
-    if (results.multiHandLandmarks.length > 0) {
-      const wrist = results.multiHandLandmarks[0][0]; // wrist landmark
-      const wristY = wrist.y;
+// Eye blink detection helper
+function getEyeOpenRatio(landmarks, indices) {
+    // simple vertical distance / horizontal distance ratio
+    const top = landmarks[indices[1]];
+    const bottom = landmarks[indices[5]];
+    const left = landmarks[indices[0]];
+    const right = landmarks[indices[3]];
+    const vertical = Math.hypot(top.x - bottom.x, top.y - bottom.y);
+    const horizontal = Math.hypot(left.x - right.x, left.y - right.y);
+    return vertical / horizontal;
+}
 
-      // Hand up → unmute / Hand down → mute
-      if (wristY < 0.2 && isMuted) {
-        audioPlayer.volume = 1;
-        isMuted = false;
-        console.log('Unmuted');
-      } else if (wristY > 0.8 && !isMuted) {
-        audioPlayer.volume = 0;
-        isMuted = true;
-        console.log('Muted');
-      }
+faceMesh.onResults(results => {
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        const landmarks = results.multiFaceLandmarks[0];
+        
+        // Right eye indices for blink detection (example)
+        const rightEyeIndices = [33, 159, 145, 133, 153, 154];
+        const eyeRatio = getEyeOpenRatio(landmarks, rightEyeIndices);
+
+        // Threshold for blink (close eye)
+        if (eyeRatio < 0.2 && !isMuted) {
+            audioPlayer.volume = 0; // mute
+            isMuted = true;
+            console.log('Muted by eye blink');
+        } else if (eyeRatio >= 0.2 && isMuted) {
+            audioPlayer.volume = 1; // unmute
+            isMuted = false;
+            console.log('Unmuted by eye open');
+        }
     }
-  });
+});
 
-  // Start camera
-  setupCamera().then(() => {
+// Start camera
+setupCamera().then(() => {
     const camera = new Camera(video, {
-      onFrame: async () => {
-        await hands.send({ image: video });
-      },
-      width: 640,
-      height: 480
+        onFrame: async () => {
+            await faceMesh.send({image: video});
+        },
+        width: 640,
+        height: 480
     });
     camera.start();
-  });
+});
 </script>
