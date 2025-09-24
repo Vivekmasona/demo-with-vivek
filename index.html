@@ -1,22 +1,32 @@
-<video id="video" width="640" height="480" autoplay></video>
+<!-- Video stream for hand detection -->
+<video id="video" width="640" height="480" autoplay style="display:none;"></video>
+
+<!-- Audio Player -->
 <audio id="audioPlayer" controls>
-  <source src="your-audio-file.mp3" type="audio/mpeg">
+  <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
   Your browser does not support the audio element.
 </audio>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+<!-- Mediapipe Hands library -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
 <script>
   const video = document.getElementById('video');
   const audioPlayer = document.getElementById('audioPlayer');
+  let isMuted = false;
 
-  // Initialize webcam
+  // Setup webcam
   async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
   }
 
-  // Initialize Hand Detection
-  const hands = new Hands();
+  // Hand detection using Mediapipe
+  const hands = new Hands({locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+  }});
+
   hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
@@ -26,20 +36,23 @@
 
   hands.onResults(results => {
     if (results.multiHandLandmarks.length > 0) {
-      const hand = results.multiHandLandmarks[0];
-      const wrist = hand[0];
+      const wrist = results.multiHandLandmarks[0][0]; // wrist landmark
       const wristY = wrist.y;
 
-      // Control audio volume based on hand position
-      if (wristY < 0.2) {
-        audioPlayer.volume = 1; // Unmute
-      } else if (wristY > 0.8) {
-        audioPlayer.volume = 0; // Mute
+      // Hand up → unmute / Hand down → mute
+      if (wristY < 0.2 && isMuted) {
+        audioPlayer.volume = 1;
+        isMuted = false;
+        console.log('Unmuted');
+      } else if (wristY > 0.8 && !isMuted) {
+        audioPlayer.volume = 0;
+        isMuted = true;
+        console.log('Muted');
       }
     }
   });
 
-  // Start camera and hand detection
+  // Start camera
   setupCamera().then(() => {
     const camera = new Camera(video, {
       onFrame: async () => {
