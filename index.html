@@ -1,95 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Eyebrow Scroll Demo</title>
+  <title>Face-Controlled Video</title>
   <style>
-    body { margin:0; font-family:sans-serif; }
-    video { position: fixed; top:0; left:0; width:200px; height:150px; z-index:1000; border:2px solid red; }
-    canvas { position: fixed; top:0; left:0; width:200px; height:150px; z-index:1001; pointer-events:none; }
-    .list-item { padding:20px; border-bottom:1px solid #ccc; }
+    body { margin:0; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#000; }
+    video { width:640px; height:360px; border:2px solid #fff; }
   </style>
 </head>
 <body>
 
-<video id="video" autoplay></video>
-<canvas id="overlay" width="200" height="150"></canvas>
-
-<div id="listContainer"></div>
+<video id="myVideo" muted>
+  <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
+  Your browser does not support HTML5 video.
+</video>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-// Create fake list
-const listContainer = document.getElementById('listContainer');
-for(let i=1;i<=100;i++){
-  const div = document.createElement('div');
-  div.className = 'list-item';
-  div.textContent = `Item ${i}`;
-  listContainer.appendChild(div);
-}
-
-// Webcam & canvas
-const video = document.getElementById('video');
-const canvas = document.getElementById('overlay');
-const ctx = canvas.getContext('2d');
+const videoElement = document.getElementById('myVideo');
+const cameraVideo = document.createElement('video');
+cameraVideo.style.display = 'none';
+document.body.appendChild(cameraVideo);
 
 async function setupCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({ video:true });
-  video.srcObject = stream;
+  cameraVideo.srcObject = stream;
+  await cameraVideo.play();
 }
 
 // Mediapipe FaceMesh
 const faceMesh = new FaceMesh({locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
 faceMesh.setOptions({
   maxNumFaces:1,
-  refineLandmarks:true,
+  refineLandmarks:false,
   minDetectionConfidence:0.5,
   minTrackingConfidence:0.5
 });
 
-// Draw dot
-function drawDot(x,y){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.beginPath();
-  ctx.arc(x,y,6,0,2*Math.PI);
-  ctx.fillStyle='red';
-  ctx.fill();
-}
-
-// Scroll page based on eyebrow
+let faceVisible = false;
 faceMesh.onResults(results=>{
   if(results.multiFaceLandmarks && results.multiFaceLandmarks.length>0){
-    const landmarks = results.multiFaceLandmarks[0];
-
-    // Dot position on left eyebrow (landmark 70)
-    const brow = landmarks[70];
-    const dotX = brow.x * canvas.width;
-    const dotY = brow.y * canvas.height;
-    drawDot(dotX,dotY);
-
-    // Eyebrow raise detection using vertical distance between eyebrow and eye
-    const eyeTop = landmarks[159].y; // top of left eye
-    const browDistance = eyeTop - brow.y;
-
-    // Threshold for eyebrow up
-    const threshold = 0.03;
-    const scrollSpeed = 15;
-
-    if(browDistance > threshold){
-      window.scrollBy(0,-scrollSpeed); // scroll up
+    // Face detected
+    if(!faceVisible){
+      videoElement.play();
+      faceVisible = true;
+      console.log("Face detected → video playing");
     }
   } else {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // Face not detected
+    if(faceVisible){
+      videoElement.pause();
+      faceVisible = false;
+      console.log("Face lost → video paused");
+    }
   }
 });
 
 // Start camera
 setupCamera().then(()=>{
-  const camera = new Camera(video,{
-    onFrame: async()=>{await faceMesh.send({image:video});},
-    width:200,
-    height:150
+  const camera = new Camera(cameraVideo,{
+    onFrame: async()=>{await faceMesh.send({image:cameraVideo});},
+    width:640,
+    height:480
   });
   camera.start();
 });
