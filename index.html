@@ -1,13 +1,12 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Face Controlled Scroll</title>
+  <title>Eyebrow Scroll Demo</title>
   <style>
-    body { margin: 0; font-family: sans-serif; }
-    video { position: fixed; top: 0; left: 0; width: 200px; height: 150px; z-index: 1000; border: 2px solid red; }
-    canvas { position: fixed; top: 0; left: 0; width: 200px; height: 150px; z-index: 1001; pointer-events:none; }
-    .list-item { padding: 20px; border-bottom: 1px solid #ccc; }
+    body { margin:0; font-family:sans-serif; }
+    video { position: fixed; top:0; left:0; width:200px; height:150px; z-index:1000; border:2px solid red; }
+    canvas { position: fixed; top:0; left:0; width:200px; height:150px; z-index:1001; pointer-events:none; }
+    .list-item { padding:20px; border-bottom:1px solid #ccc; }
   </style>
 </head>
 <body>
@@ -21,7 +20,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-// Create a fake list
+// Create fake list
 const listContainer = document.getElementById('listContainer');
 for(let i=1;i<=100;i++){
   const div = document.createElement('div');
@@ -36,12 +35,12 @@ const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
 
 async function setupCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  const stream = await navigator.mediaDevices.getUserMedia({ video:true });
   video.srcObject = stream;
 }
 
 // Mediapipe FaceMesh
-const faceMesh = new FaceMesh({locateFile: (file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+const faceMesh = new FaceMesh({locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
 faceMesh.setOptions({
   maxNumFaces:1,
   refineLandmarks:true,
@@ -49,29 +48,36 @@ faceMesh.setOptions({
   minTrackingConfidence:0.5
 });
 
-// Draw dot on canvas
+// Draw dot
 function drawDot(x,y){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.beginPath();
-  ctx.arc(x, y, 6, 0, 2*Math.PI);
-  ctx.fillStyle = 'red';
+  ctx.arc(x,y,6,0,2*Math.PI);
+  ctx.fillStyle='red';
   ctx.fill();
 }
 
+// Scroll page based on eyebrow
 faceMesh.onResults(results=>{
   if(results.multiFaceLandmarks && results.multiFaceLandmarks.length>0){
     const landmarks = results.multiFaceLandmarks[0];
-    const nose = landmarks[1]; // nose tip
-    const dotX = nose.x * canvas.width;
-    const dotY = nose.y * canvas.height;
+
+    // Dot position on left eyebrow (landmark 70)
+    const brow = landmarks[70];
+    const dotX = brow.x * canvas.width;
+    const dotY = brow.y * canvas.height;
     drawDot(dotX,dotY);
 
-    // Scroll page based on dot vertical position
+    // Eyebrow raise detection using vertical distance between eyebrow and eye
+    const eyeTop = landmarks[159].y; // top of left eye
+    const browDistance = eyeTop - brow.y;
+
+    // Threshold for eyebrow up
+    const threshold = 0.03;
     const scrollSpeed = 15;
-    if(dotY < canvas.height*0.3){ // nose up → scroll up
-      window.scrollBy(0,-scrollSpeed);
-    } else if(dotY > canvas.height*0.7){ // nose down → scroll down
-      window.scrollBy(0,scrollSpeed);
+
+    if(browDistance > threshold){
+      window.scrollBy(0,-scrollSpeed); // scroll up
     }
   } else {
     ctx.clearRect(0,0,canvas.width,canvas.height);
