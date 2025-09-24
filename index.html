@@ -1,79 +1,98 @@
-<!-- Webcam video -->
-<video id="video" width="640" height="480" autoplay style="position:absolute; z-index:1;"></video>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Eyebrow Scroll + Fake Audio List</title>
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    video { position: fixed; top: 0; left: 0; width: 200px; height: 150px; z-index: 1000; border: 2px solid red; }
+    canvas { position: fixed; top: 0; left: 0; width: 200px; height: 150px; z-index: 1001; pointer-events:none; }
+    .audio-list { margin-top: 200px; padding: 20px; }
+    .audio-item { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
 
-<!-- Canvas overlay for landmarks (optional) -->
-<canvas id="overlay" width="640" height="480" style="position:absolute; left:0; top:0; z-index:2;"></canvas>
+<video id="video" autoplay></video>
+<canvas id="overlay" width="200" height="150"></canvas>
+
+<div class="audio-list" id="audioList"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
+// Fake audio list
+const audioList = document.getElementById('audioList');
+for(let i=1;i<=50;i++){
+  const div = document.createElement('div');
+  div.className = 'audio-item';
+  div.innerHTML = `<strong>Fake Song ${i}</strong> <audio controls src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>`;
+  audioList.appendChild(div);
+}
+
+// Webcam setup
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
-let lastScroll = window.scrollY;
 
-// Setup camera
 async function setupCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
 }
 
-// Initialize FaceMesh
+// FaceMesh
 const faceMesh = new FaceMesh({locateFile: (file) => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+  return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
 }});
 faceMesh.setOptions({
-    maxNumFaces: 1,
-    refineLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
 });
 
-// Draw landmarks (optional)
 function drawLandmarks(landmarks){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    for(let i=0;i<landmarks.length;i++){
-        const x = landmarks[i].x * canvas.width;
-        const y = landmarks[i].y * canvas.height;
-        ctx.beginPath();
-        ctx.arc(x, y, 2, 0, 2*Math.PI);
-        ctx.fillStyle = 'red';
-        ctx.fill();
-    }
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let i=0;i<landmarks.length;i++){
+      const x = landmarks[i].x * canvas.width;
+      const y = landmarks[i].y * canvas.height;
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, 2*Math.PI);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+  }
 }
 
-faceMesh.onResults(results => {
-    if(results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
-        const landmarks = results.multiFaceLandmarks[0];
-        drawLandmarks(landmarks);
+faceMesh.onResults(results=>{
+  if(results.multiFaceLandmarks && results.multiFaceLandmarks.length>0){
+      const landmarks = results.multiFaceLandmarks[0];
+      drawLandmarks(landmarks);
 
-        // Eyebrow up detection
-        // Left eyebrow indices (example: 70 = top, 105 = bottom)
-        const leftBrowTop = landmarks[70].y;
-        const leftBrowBottom = landmarks[105].y;
+      // Eyebrow up/down detection
+      const leftBrowTop = landmarks[70].y;
+      const leftBrowBottom = landmarks[105].y;
+      const rightBrowTop = landmarks[300].y;
+      const rightBrowBottom = landmarks[334].y;
 
-        const rightBrowTop = landmarks[300].y;
-        const rightBrowBottom = landmarks[334].y;
+      const browHeight = ((leftBrowBottom-leftBrowTop)+(rightBrowBottom-rightBrowTop))/2;
 
-        // Calculate relative eyebrow height
-        const browHeight = ((leftBrowBottom - leftBrowTop) + (rightBrowBottom - rightBrowTop)) / 2;
-
-        // Threshold for eyebrow raise (adjust if needed)
-        if(browHeight < 0.03){ // eyebrows raised
-            window.scrollBy(0, -10); // scroll up
-        } else if(browHeight > 0.06){ // eyebrows lowered
-            window.scrollBy(0, 10); // scroll down
-        }
-    }
+      if(browHeight < 0.03){ // eyebrows raised
+          window.scrollBy(0,-10);
+      } else if(browHeight > 0.06){ // eyebrows down
+          window.scrollBy(0,10);
+      }
+  }
 });
 
-// Start camera
 setupCamera().then(()=>{
-    const camera = new Camera(video,{
-        onFrame: async()=>{ await faceMesh.send({image: video}); },
-        width:640, height:480
-    });
-    camera.start();
+  const camera = new Camera(video,{
+      onFrame: async()=>{await faceMesh.send({image: video});},
+      width:200,
+      height:150
+  });
+  camera.start();
 });
 </script>
+
+</body>
+</html>
