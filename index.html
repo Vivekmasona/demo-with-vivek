@@ -1,13 +1,13 @@
+
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Eyebrow Scroll + Fake Audio List</title>
+  <title>Face Controlled Scroll</title>
   <style>
     body { margin: 0; font-family: sans-serif; }
     video { position: fixed; top: 0; left: 0; width: 200px; height: 150px; z-index: 1000; border: 2px solid red; }
     canvas { position: fixed; top: 0; left: 0; width: 200px; height: 150px; z-index: 1001; pointer-events:none; }
-    .audio-list { margin-top: 200px; padding: 20px; }
-    .audio-item { margin-bottom: 15px; }
+    .list-item { padding: 20px; border-bottom: 1px solid #ccc; }
   </style>
 </head>
 <body>
@@ -15,22 +15,22 @@
 <video id="video" autoplay></video>
 <canvas id="overlay" width="200" height="150"></canvas>
 
-<div class="audio-list" id="audioList"></div>
+<div id="listContainer"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-// Fake audio list
-const audioList = document.getElementById('audioList');
-for(let i=1;i<=50;i++){
+// Create a fake list
+const listContainer = document.getElementById('listContainer');
+for(let i=1;i<=100;i++){
   const div = document.createElement('div');
-  div.className = 'audio-item';
-  div.innerHTML = `<strong>Fake Song ${i}</strong> <audio controls src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>`;
-  audioList.appendChild(div);
+  div.className = 'list-item';
+  div.textContent = `Item ${i}`;
+  listContainer.appendChild(div);
 }
 
-// Webcam setup
+// Webcam & canvas
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
@@ -40,55 +40,50 @@ async function setupCamera() {
   video.srcObject = stream;
 }
 
-// FaceMesh
-const faceMesh = new FaceMesh({locateFile: (file) => {
-  return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-}});
+// Mediapipe FaceMesh
+const faceMesh = new FaceMesh({locateFile: (file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
 faceMesh.setOptions({
-  maxNumFaces: 1,
-  refineLandmarks: true,
-  minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
+  maxNumFaces:1,
+  refineLandmarks:true,
+  minDetectionConfidence:0.5,
+  minTrackingConfidence:0.5
 });
 
-function drawLandmarks(landmarks){
+// Draw dot on canvas
+function drawDot(x,y){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let i=0;i<landmarks.length;i++){
-      const x = landmarks[i].x * canvas.width;
-      const y = landmarks[i].y * canvas.height;
-      ctx.beginPath();
-      ctx.arc(x, y, 2, 0, 2*Math.PI);
-      ctx.fillStyle = 'red';
-      ctx.fill();
-  }
+  ctx.beginPath();
+  ctx.arc(x, y, 6, 0, 2*Math.PI);
+  ctx.fillStyle = 'red';
+  ctx.fill();
 }
 
 faceMesh.onResults(results=>{
   if(results.multiFaceLandmarks && results.multiFaceLandmarks.length>0){
-      const landmarks = results.multiFaceLandmarks[0];
-      drawLandmarks(landmarks);
+    const landmarks = results.multiFaceLandmarks[0];
+    const nose = landmarks[1]; // nose tip
+    const dotX = nose.x * canvas.width;
+    const dotY = nose.y * canvas.height;
+    drawDot(dotX,dotY);
 
-      // Eyebrow up/down detection
-      const leftBrowTop = landmarks[70].y;
-      const leftBrowBottom = landmarks[105].y;
-      const rightBrowTop = landmarks[300].y;
-      const rightBrowBottom = landmarks[334].y;
-
-      const browHeight = ((leftBrowBottom-leftBrowTop)+(rightBrowBottom-rightBrowTop))/2;
-
-      if(browHeight < 0.03){ // eyebrows raised
-          window.scrollBy(0,-10);
-      } else if(browHeight > 0.06){ // eyebrows down
-          window.scrollBy(0,10);
-      }
+    // Scroll page based on dot vertical position
+    const scrollSpeed = 15;
+    if(dotY < canvas.height*0.3){ // nose up → scroll up
+      window.scrollBy(0,-scrollSpeed);
+    } else if(dotY > canvas.height*0.7){ // nose down → scroll down
+      window.scrollBy(0,scrollSpeed);
+    }
+  } else {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
   }
 });
 
+// Start camera
 setupCamera().then(()=>{
   const camera = new Camera(video,{
-      onFrame: async()=>{await faceMesh.send({image: video});},
-      width:200,
-      height:150
+    onFrame: async()=>{await faceMesh.send({image:video});},
+    width:200,
+    height:150
   });
   camera.start();
 });
