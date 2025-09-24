@@ -1,8 +1,11 @@
-<!-- Video stream (webcam) -->
-<video id="video" width="640" height="480" autoplay></video>
+<!-- Webcam video -->
+<video id="video" width="640" height="480" autoplay style="position:absolute; z-index:1;"></video>
 
-<!-- Audio Player -->
-<audio id="audioPlayer" controls>
+<!-- Canvas overlay -->
+<canvas id="overlay" width="640" height="480" style="position:absolute; left:0; top:0; z-index:2;"></canvas>
+
+<!-- Audio player -->
+<audio id="audioPlayer" controls style="position:relative; top:500px;">
   <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
   Your browser does not support the audio element.
 </audio>
@@ -13,10 +16,12 @@
 
 <script>
 const video = document.getElementById('video');
+const canvas = document.getElementById('overlay');
+const ctx = canvas.getContext('2d');
 const audioPlayer = document.getElementById('audioPlayer');
 let blinkCooldown = false;
 
-// Setup camera
+// Setup webcam
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
@@ -33,7 +38,7 @@ faceMesh.setOptions({
     minTrackingConfidence: 0.5
 });
 
-// Helper to calculate eye aspect ratio
+// Eye aspect ratio helper
 function getEyeAspectRatio(landmarks, indices) {
     const top = landmarks[indices[1]];
     const bottom = landmarks[indices[5]];
@@ -44,17 +49,30 @@ function getEyeAspectRatio(landmarks, indices) {
     return vertical / horizontal;
 }
 
+// Draw landmarks as dots
+function drawLandmarks(landmarks) {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for (let i=0;i<landmarks.length;i++){
+        const x = landmarks[i].x * canvas.width;
+        const y = landmarks[i].y * canvas.height;
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, 2*Math.PI);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+    }
+}
+
 faceMesh.onResults(results => {
     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         const landmarks = results.multiFaceLandmarks[0];
+        drawLandmarks(landmarks);
 
-        // Right eye indices (example)
+        // Right eye blink detection
         const rightEyeIndices = [33, 159, 145, 133, 153, 154];
         const ear = getEyeAspectRatio(landmarks, rightEyeIndices);
 
-        // Blink threshold
         if (ear < 0.2 && !blinkCooldown) {
-            if (audioPlayer.paused) {
+            if(audioPlayer.paused){
                 audioPlayer.play();
                 console.log('Play');
             } else {
@@ -62,19 +80,18 @@ faceMesh.onResults(results => {
                 console.log('Pause');
             }
             blinkCooldown = true;
-            setTimeout(() => blinkCooldown = false, 1000); // 1 second cooldown
+            setTimeout(()=>blinkCooldown=false, 1000); // 1s cooldown
         }
+    } else {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
     }
 });
 
 // Start camera
-setupCamera().then(() => {
-    const camera = new Camera(video, {
-        onFrame: async () => {
-            await faceMesh.send({image: video});
-        },
-        width: 640,
-        height: 480
+setupCamera().then(()=>{
+    const camera = new Camera(video,{
+        onFrame: async()=>{ await faceMesh.send({image: video}); },
+        width:640, height:480
     });
     camera.start();
 });
