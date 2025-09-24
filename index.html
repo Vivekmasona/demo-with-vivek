@@ -1,18 +1,9 @@
 <!-- Webcam video -->
 <video id="video" width="640" height="480" autoplay style="position:absolute; z-index:1;"></video>
 
-<!-- Canvas overlay -->
+<!-- Canvas overlay for landmarks (optional) -->
 <canvas id="overlay" width="640" height="480" style="position:absolute; left:0; top:0; z-index:2;"></canvas>
 
-<!-- Target button -->
-<button id="targetBtn" style="position:absolute; left:500px; top:200px; z-index:3; width:100px; height:50px;">Click Me</button>
-
-<!-- Audio Player for demo -->
-<audio id="audioPlayer" controls style="position:absolute; top:550px;">
-  <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
-</audio>
-
-<!-- Mediapipe FaceMesh -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
@@ -20,10 +11,9 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('overlay');
 const ctx = canvas.getContext('2d');
-const btn = document.getElementById('targetBtn');
-let holdTimeout = null;
+let lastScroll = window.scrollY;
 
-// Setup webcam
+// Setup camera
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     video.srcObject = stream;
@@ -40,43 +30,40 @@ faceMesh.setOptions({
     minTrackingConfidence: 0.5
 });
 
-// Draw dot on nose
-let dot = {x: 0, y: 0};
-faceMesh.onResults(results => {
+// Draw landmarks (optional)
+function drawLandmarks(landmarks){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    if(results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
-        const landmarks = results.multiFaceLandmarks[0];
-        const nose = landmarks[1]; // nose tip landmark
-        dot.x = nose.x * canvas.width;
-        dot.y = nose.y * canvas.height;
-
-        // Draw dot
+    for(let i=0;i<landmarks.length;i++){
+        const x = landmarks[i].x * canvas.width;
+        const y = landmarks[i].y * canvas.height;
         ctx.beginPath();
-        ctx.arc(dot.x, dot.y, 10, 0, 2*Math.PI);
+        ctx.arc(x, y, 2, 0, 2*Math.PI);
         ctx.fillStyle = 'red';
         ctx.fill();
+    }
+}
 
-        // Check if dot over button
-        const btnRect = btn.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
-        const dotScreenX = canvasRect.left + dot.x;
-        const dotScreenY = canvasRect.top + dot.y;
+faceMesh.onResults(results => {
+    if(results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0){
+        const landmarks = results.multiFaceLandmarks[0];
+        drawLandmarks(landmarks);
 
-        if(dotScreenX > btnRect.left && dotScreenX < btnRect.right &&
-           dotScreenY > btnRect.top && dotScreenY < btnRect.bottom){
-               if(!holdTimeout){
-                   holdTimeout = setTimeout(()=>{
-                       btn.click();
-                       console.log('Button clicked via face dot!');
-                       holdTimeout = null;
-                   },4000); // 4 second hold
-               }
-        } else {
-            if(holdTimeout){
-                clearTimeout(holdTimeout);
-                holdTimeout = null;
-            }
+        // Eyebrow up detection
+        // Left eyebrow indices (example: 70 = top, 105 = bottom)
+        const leftBrowTop = landmarks[70].y;
+        const leftBrowBottom = landmarks[105].y;
+
+        const rightBrowTop = landmarks[300].y;
+        const rightBrowBottom = landmarks[334].y;
+
+        // Calculate relative eyebrow height
+        const browHeight = ((leftBrowBottom - leftBrowTop) + (rightBrowBottom - rightBrowTop)) / 2;
+
+        // Threshold for eyebrow raise (adjust if needed)
+        if(browHeight < 0.03){ // eyebrows raised
+            window.scrollBy(0, -10); // scroll up
+        } else if(browHeight > 0.06){ // eyebrows lowered
+            window.scrollBy(0, 10); // scroll down
         }
     }
 });
